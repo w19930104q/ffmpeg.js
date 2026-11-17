@@ -58,12 +58,16 @@ ffmpeg.js also provides wrapper for main function with Web Worker interface to o
 * `{type: "stdout", data: "<line>"}` - FFmpeg printed to stdout.
 * `{type: "stderr", data: "<line>"}` - FFmpeg printed to stderr.
 * `{type: "exit", data: "<code>"}` - FFmpeg exited.
-* `{type: "done", data: "<result>"}` - Job finished with some result.
+* `{type: "done", data: "<result>"}` - Job finished with some result. On a non-zero FFmpeg exit the result contains an empty `MEMFS` array; partial outputs of failed jobs are never returned.
 * `{type: "error", data: "<error description>"}` - Error occurred.
 * `{type: "abort", data: "<abort reason>"}` - FFmpeg terminated abnormally (e.g. out of memory, wasm error).
+* `{type: "cancelled"}` - Job was cancelled; all its partial outputs were discarded. Followed by `{type: "exit", data: 130}`.
+
+The worker is a recoverable state machine: after `done`, `abort` or `cancelled` it returns to the idle state and the same Worker can safely accept the next job, even if the previous one terminated suddenly.
 
 You can send the following messages to the worker:
 * `{type: "run", ...opts}` - Start new job with provided options.
+* `{type: "cancel"}` - Ask the worker to cancel the currently running job. Because the event loop is blocked while FFmpeg executes, this is only observed at the next output callback; for immediate cancellation pass a `cancelBuffer` option with the `run` message: an `Int32Array`-backed `SharedArrayBuffer` whose first element the host sets to `1` to cancel the job (requires cross-origin isolation in browsers; works out of the box in Node's worker_threads).
 
 ```js
 const worker = new Worker("ffmpeg-worker-webm.js");
